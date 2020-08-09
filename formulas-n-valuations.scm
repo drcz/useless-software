@@ -45,6 +45,18 @@
       ===> (p2 q r p))
 
 
+(define (substitute formula* #;for name #;in formula)
+  (match formula
+    ('⊥ '⊥)
+    ((? name?) (if (equal? formula name) formula* formula))
+    (('¬ f) `(¬ ,(substitute formula* #;for name #;in f)))
+    ((o f f*) `(,o ,(substitute formula* #;for name #;in f)
+                   ,(substitute formula* #;for name #;in f*)))))
+
+(e.g. (substitute '(v p q) 'A '(→ A A))
+      ===> (→ (v p q) (v p q)))
+
+
 (define (expressed-as-¬v& formula)
   (match formula
     ('⊥ `(& p (¬ p)))
@@ -177,6 +189,16 @@
             ((q . #t) (p . #f))))
 
 
+(define (tautology? formula)
+  (every (lambda (valuation) (value formula valuation))
+         (all-valuations #;over (names formula))))
+
+(e.g. (tautology? '(v p (¬ p))))
+(e.g. (tautology? '(v (→ p q) (→ q v))))
+(e.g. (not (tautology? '(→ p q))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; "semantic" way of converting into Disjunctive Normal Form:
 
 (define (DNF #;for formula)
