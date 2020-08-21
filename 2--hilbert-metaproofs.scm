@@ -298,9 +298,9 @@
 ;;; submetainferences...
 (define all-submetainferences all-subinferences)
 
-;;; for some hypotheses Σ when we know (Σ ⊢ p) and (Σ ⊢ (→ p q)) both hold,
-;;; we should be able to deduce (Σ ⊢ q) -- as we could concatenate inferences
-;;; for p and (→ p q) and then append q which follows by MP.
+;;; for some hypotheses Σ when we know (Σ ⊢ φ) and (Σ ⊢ (→ φ ψ)) both hold,
+;;; we should be able to deduce (Σ ⊢ ψ) -- as we could concatenate inferences
+;;; for φ and (→ φ ψ) and then append ψ which follows by MP.
 
 (define (⊢-follows-by-MP? judgement #;from previous-judgements)
   (and-let* (((hypotheses '⊢ formula) judgement))
@@ -344,6 +344,36 @@
                             '((   (q) ⊢ (→ p q)))))
 
 
+;;; Now something Ramsay doesn't mention but clearly uses implicitly;
+;;; when we know (Σ ⊢ φ) and (Σ* ⊢ ψi) for every ψi in Σ, we also must have
+;;; (Σ** ⊢ φ) whenever Σ** ⊂ Σ. this allows to compose metainferences with
+;;; nontrivial hypotheses "dependencies":
+
+(define (⊢-follows-by-composition? judgement #;from previous-judgements)
+  (define (enough-to-infer? formula #;given hypotheses #;wrt previous-judgements)
+    (any (lambda (judgement*)
+           (and-let* (((hypotheses* '⊢ formula*) judgement*))
+             (and (equal? formula* formula)
+                  (subset? hypotheses* hypotheses))))
+         previous-judgements))
+
+  (and-let* (((hypotheses '⊢ formula) judgement))
+    (any (lambda (judgement*)
+           (and-let* (((hypotheses* '⊢ formula*) judgement*))
+             (and (equal? formula* formula)
+                  (every (lambda (hypothesis)
+                           (enough-to-infer? hypothesis
+                                             #;given hypotheses
+                                             #;wrt previous-judgements))
+                         hypotheses*))))
+         previous-judgements)))
+
+(e.g. (⊢-follows-by-composition? '((p q) ⊢ r)
+                                 '( (            (p q) ⊢ (→ p q))
+                                    (              (p) ⊢ (→ p p))
+                                    (((→ p p) (→ p q)) ⊢ r))))
+
+
 ;;; There is a very useful result called Deduction Theorem, which
 ;;; states that if ((φ) ⊢ φ*) then (() ⊢ (→ φ φ*)), and more generally if
 ;;; Σ is Σ* with φ included (or using set-theoretic metaphor Σ = Σ* ∪ {φ})
@@ -377,6 +407,7 @@
                        (not (⊢-follows-by-subset? judgement previous))
                        (not (⊢-follows-by-DT? judgement previous))
                        (not (⊢-follows-by-MP? judgement previous))
+                       (not (⊢-follows-by-composition? judgement previous))
                        judgement)))
               (all-submetainferences metainference)))
 
@@ -480,6 +511,44 @@
              q))                       ;; actual conclusion formula
 
 
+;;; this version is slightly uglier but whenever a justification for
+;;; composition is found, it returns a list of judgements allowing
+;;; to infer it.
+(define (⊢-follows-by-composition*? judgement #;from previous-judgements)
+
+  (define (enough-to-infer formula #;given hypotheses #;wrt previous-judgements)
+    (any (lambda (judgement*)
+           (and-let* (((hypotheses* '⊢ formula*) judgement*))
+             (and (equal? formula* formula)
+                  (subset? hypotheses* hypotheses)
+                  judgement*)))
+         previous-judgements))
+
+  (and-let* (((hypotheses '⊢ formula) judgement))
+    (any (lambda (judgement*)
+           (and-let* (((hypotheses* '⊢ formula*) judgement*)
+                      (_ (equal? formula* formula))
+                      (justification-for-hypotheses*
+                       (every-map (lambda (hypothesis)
+                                    (enough-to-infer hypothesis
+                                                     #;given hypotheses
+                                                     #;wrt previous-judgements))
+                                  hypotheses*)))
+             `(,@justification-for-hypotheses* ,judgement*)))
+         previous-judgements)))
+         
+
+(e.g. (⊢-follows-by-composition*? '((p q) ⊢ r)
+                                 '( (            (p q) ⊢ (→ p q))
+                                    (            (p q) ⊢ q)
+                                    (              (p) ⊢ (→ p p))
+                                    (((→ p p) (→ p q) q) ⊢ r)))
+      ===> (((p) ⊢ (→ p p))   ;;; justifies first hypothesis
+            ((p q) ⊢ (→ p q)) ;;; ... second ...
+            ((p q) ⊢ q)       ;;; ... third ...
+            (((→ p p) (→ p q) q) ⊢ r))) ;;; finally: justifies the initial frm.
+
+
 ;;; now we'll go through the inference judgement by judgement, each time
 ;;; generating the inference in question. on the last one, its inference
 ;;; is the one we're looking for.
@@ -501,18 +570,25 @@
                  ;;; following by subset doesn't influence the inference,
                  ;;; i.e. it's the same as for ``parent judgement'':
                  (and-let* ((judgement*
-                             (⊢-follows-by-subset*? judgement previous)))
+                             (⊢-follows-by-subset? judgement previous)))
                    (assoc-ref constructed judgement*))
+                 ;;; following by composition requires concatenating all
+                 ;;; inferences for hypotheses and the inference from them
+                 ;;; to the formula that current judgement is about:
+                 (and-let* ((judgements
+                             (⊢-follows-by-composition*? judgement previous)))
+                   (append-map (lambda (i) (assoc-ref constructed i)) judgements))
                  ;;; following by DT requires relativizing parent judgement's
                  ;;; inference wrt to [some] hypothesis:
                  (and-let* (((judgement* hypothesis*)
-                             (⊢-follows-by-DT*? judgement previous))
+                             (⊢-follows-by-DT? judgement previous))
                             (inference*
                              (assoc-ref constructed judgement*)))
                    (relativized inference* hypothesis*))
-                 ;;; finally, following by MP requires 
+                 ;;; finally, following by MP requires inferences for implication
+                 ;;; and for antecentent, followed by the conclusion alone:
                  (and-let* (((imp-judgement ant-judgement conclusion)
-                             (⊢-follows-by-MP*? judgement previous))
+                             (⊢-follows-by-MP? judgement previous))
                             (imp-inference
                              (assoc-ref constructed imp-judgement))
                             (ant-inference
@@ -521,7 +597,6 @@
                      ,@ant-inference
                      ,conclusion)))))
           (next pending* `(,@constructed (,judgement . ,inference)))))))
-
 
 (e.g. (let* ((metaproof '( ((p (→ p ⊥)) ⊢ p)
                            ((p (→ p ⊥)) ⊢ (→ p ⊥))
@@ -551,11 +626,11 @@
 ;;; these we're going to use later on too:
 
 (define (contraposition-metaproof #;for A B)
-  `( (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ ,A)       ;; hyp
+  `( (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ ,A)        ;; hyp
      (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ (→ ,A ,B)) ;; hyp
-     (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ ,B)       ;; MP
-     (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ (→ ,B ⊥)) ;; hyp
-     (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ ⊥)       ;; MP
+     (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ ,B)        ;; MP
+     (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ (→ ,B ⊥))  ;; hyp
+     (((→ ,A ,B) (→ ,B ⊥) ,A) ⊢ ⊥)         ;; MP
      (  ((→ ,A ,B) (→ ,B ⊥)) ⊢ (→ ,A ⊥))   ;; DT
      (          ((→ ,A ,B)) ⊢ (→ (→ ,B ⊥) (→ ,A ⊥))) ;; DT
      (                 () ⊢ (→ (→ ,A ,B) (→ (→ ,B ⊥) (→ ,A ⊥)))) )) ;; DT
@@ -565,6 +640,7 @@
 (e.g. (equal? (conclusion
                (inference<-metainference (contraposition-metaproof 'p 'q)))
               '(→ (→ p q) (→ (→ q ⊥) (→ p ⊥)))))
+(e.g. (tautology? '(→ (→ p q) (→ (→ q ⊥) (→ p ⊥)))))
 (e.g. (length (inference<-metainference (contraposition-metaproof 'p 'q)))
       ===> 163) 
 
@@ -590,7 +666,8 @@
 (e.g. (equal? (conclusion
                (inference<-metainference (eitherway-metaproof 'p 'q)))
               '(→ (→ p q) (→ (→ (→ p ⊥) q) q))))
+(e.g. (tautology? '(→ (→ p q) (→ (→ (→ p ⊥) q) q))))
 (e.g. (length (inference<-metainference (eitherway-metaproof 'p 'q)))
       ===> 631) ; impressive, isn't it?
        
-;;; tbc
+;;; tbc...
