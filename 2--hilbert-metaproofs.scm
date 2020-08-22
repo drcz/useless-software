@@ -8,6 +8,19 @@
 ;;; to keep each file self-contained we'll repeat some definitions from
 ;;; previous sections...
 
+;;; don't judge.
+(define (every-map p? xs)
+  (let em ((xs xs)
+           (res '()))    
+    (match xs
+      (() res)
+      ((x . xs*) (match (p? x)
+                   (#f #f)
+                   (v (em xs* `(,@res ,v))))))))
+
+(e.g. (every-map (lambda (x) (and (> x 2) (* x x))) '(3 4 5)) ===> (9 16 25))
+(e.g. (every-map (lambda (x) (and (> x 2) (* x x))) '(3 2 5)) ===> #f)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; FORMULAS, AXIOMS, VALUES, TAUTOLOGIES.
@@ -183,7 +196,7 @@
               (→ ,hypothesis ,formula) ))           ;; MP on the two above.
 
           (else ;;; formula is derived by MP then...
-           (let* (((implication antecendent ) (follows-by-MP? formula previous))
+           (let* (((implication antecendent) (follows-by-MP? formula previous))
                   ;;; and we know we have these already relativized to:
                   (antecendent* `(→ ,hypothesis ,antecendent))
                   (implication* `(→ ,hypothesis ,implication))
@@ -570,7 +583,7 @@
                  ;;; following by subset doesn't influence the inference,
                  ;;; i.e. it's the same as for ``parent judgement'':
                  (and-let* ((judgement*
-                             (⊢-follows-by-subset? judgement previous)))
+                             (⊢-follows-by-subset*? judgement previous)))
                    (assoc-ref constructed judgement*))
                  ;;; following by composition requires concatenating all
                  ;;; inferences for hypotheses and the inference from them
@@ -581,14 +594,14 @@
                  ;;; following by DT requires relativizing parent judgement's
                  ;;; inference wrt to [some] hypothesis:
                  (and-let* (((judgement* hypothesis*)
-                             (⊢-follows-by-DT? judgement previous))
+                             (⊢-follows-by-DT*? judgement previous))
                             (inference*
                              (assoc-ref constructed judgement*)))
                    (relativized inference* hypothesis*))
                  ;;; finally, following by MP requires inferences for implication
                  ;;; and for antecentent, followed by the conclusion alone:
                  (and-let* (((imp-judgement ant-judgement conclusion)
-                             (⊢-follows-by-MP? judgement previous))
+                             (⊢-follows-by-MP*? judgement previous))
                             (imp-inference
                              (assoc-ref constructed imp-judgement))
                             (ant-inference
@@ -670,4 +683,6 @@
 (e.g. (length (inference<-metainference (eitherway-metaproof 'p 'q)))
       ===> 631) ; impressive, isn't it?
        
-;;; tbc...
+
+;;; there's more fun to be had in 3--generating-proofs.scm
+

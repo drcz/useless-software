@@ -512,11 +512,10 @@
 ;;; GENERATING PROOFS.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; kalmar's lemma; hold my coffee.
+;;; based on [probably] Kalmar's proof of [definitely] completeness theorem;
+;;; hold my coffee! four useful metainferences:
 
-;;; four useful metainferences:
-
-(define (kalmar-1 A B)
+(define (metainference-kalmar-1 A B)
   `( ,@(metaproof-→⊥A #;for B) ;; ex falso quodlibet, cf below...
      (((→ ,A ⊥) (→ ,B ⊥) ,A) ⊢ ,A)           ;; hyp
      (((→ ,A ⊥) (→ ,B ⊥) ,A) ⊢ (→ ,A ⊥))     ;; hyp
@@ -525,12 +524,12 @@
      (((→ ,A ⊥) (→ ,B ⊥) ,A) ⊢ ,B)           ;; MP 
      (   ((→ ,A ⊥) (→ ,B ⊥)) ⊢ (→ ,A ,B)) )) ;; DT 
 
-(define (kalmar-2 A B)
+(define (metainference-kalmar-2 A B)
   `( (((→ ,A ⊥) ,B) ⊢ ,B)               ;; hyp
      (((→ ,A ⊥) ,B) ⊢ (→ ,B (→ ,A ,B))) ;; Ax1
      (((→ ,A ⊥) ,B) ⊢ (→ ,A ,B)) ))     ;; MP
 
-(define (kalmar-3 A B)
+(define (metainference-kalmar-3 A B)
   `( ((,A (→ ,B ⊥) (→ ,A ,B)) ⊢ ,A)                 ;; hyp
      ((,A (→ ,B ⊥) (→ ,A ,B)) ⊢ (→ ,A ,B))          ;; hyp
      ((,A (→ ,B ⊥) (→ ,A ,B)) ⊢ ,B)                 ;; MP
@@ -538,7 +537,7 @@
      ((,A (→ ,B ⊥) (→ ,A ,B)) ⊢ ⊥)                  ;; MP
      (          (,A (→ ,B ⊥)) ⊢ (→ (→ ,A ,B) ⊥)) )) ;; DT
 
-(define (kalmar-4 A B)
+(define (metainference-kalmar-4 A B)
   `( ((,A ,B) ⊢ ,B)           ;; hyp
      ((,A ,B) ⊢ (→ ,A ,B)) )) ;; DT
 
@@ -549,7 +548,9 @@
      (() ⊢ (→ ,A (→ ,A ,A))) ;Ax1
      (() ⊢ (→ ,A ,A)) )) ; MP
 
-;;; it's hard to find a nice name; Ramsay uses prime symbol but it sucks.
+
+;;; it's hard to find a nice name for the next one; Ramsay (likely following
+;;; Kalmar?) uses prime symbol, but it'd be silly to call it (prime _ _)...
 (define (holding formula #;in valuation)
   (if (value formula valuation) formula
       #;otherwise `(→ ,formula ⊥)))
@@ -558,8 +559,10 @@
 (e.g. (holding 'q '((p . #t) (q . #f))) ===> (→ q ⊥))
 (e.g. (holding '(→ q p) '((p . #t) (q . #f))) ===> (→ q p))
 (e.g. (holding '(→ p q) '((p . #t) (q . #f))) ===> (→ (→ p q) ⊥))
+;;; got it, dude?
 
-;;; Thm. for any valuation v and any formula φ over names (p1 ... pn)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Lm. for any valuation v and any formula φ over names (p1 ... pn)
 ;;; let pi' stand for (holding pi v) and φ' for (holding φ v). then
 ;;; we have ((p1' ... pn') ⊢ φ').
 
@@ -570,7 +573,7 @@
 ;;;  - when φ is ⊥ obviously ⊥' = (→ ⊥ ⊥) which is a theorem (cf proof→AA);
 ;;; * induction step:
 ;;;  when φ is (→ ψ ψ*) there are 4 possibilities (one for each possible
-;;;  form of ψ' and ψ*'). these are covered by proofs kalmar-1 to kalmar-4,
+;;;  form of ψ' and ψ*'). these are covered by inferences kalmar-1 to kalmar-4,
 ;;;  and the rest follows from induction hypotheses, i.e.
 ;;;  ((p1' ... pn') ⊢ ψ') and ((p1' ... pn') ⊢ ψ*').
 
@@ -586,10 +589,10 @@
             `(,@(kalmar f valuation)
               ,@(kalmar f* valuation)
               ,@(match `(,(value f valuation) ,(value f* valuation))
-                  ((#f #f) (kalmar-1 f f*))
-                  ((#f #t) (kalmar-2 f f*))
-                  ((#t #f) (kalmar-3 f f*))
-                  ((#t #t) (kalmar-4 f f*))))))
+                  ((#f #f) (metainference-kalmar-1 f f*))
+                  ((#f #t) (metainference-kalmar-2 f f*))
+                  ((#t #f) (metainference-kalmar-3 f f*))
+                  ((#t #t) (metainference-kalmar-4 f f*))))))
        (,hypotheses ⊢ ,conclusion))))
 
 
@@ -656,62 +659,16 @@
 
 
 ;;; m'kay now the real mindfuck! obviously we assume (tautology? formula).
-
-[tautology? '(→ q (→ p q))]
-[names '(→ q (→ p q))] ;(p q)
-[pretty-print [map (lambda (v) [conclusion (kalmar '(→ q (→ p q)) v)])
-                   (all-valuations '(p q ))]]
-'(((p q) ⊢ (→ q (→ p q)))
-  (((→ p ⊥) q) ⊢ (→ q (→ p q)))
-  ((p (→ q ⊥)) ⊢ (→ q (→ p q)))
-  (((→ p ⊥) (→ q ⊥)) ⊢ (→ q (→ p q))))
-"
-czyli pierw idzie
-(      (p q) ⊢ (→ q (→ p q)))
-(((→ p ⊥) q) ⊢ (→ q (→ p q)))
-
-DT:
-((q) ⊢ (→ p (→ q (→ p q))))
-((q) ⊢ (→ (→ p ⊥) (→ q (→ p q))))
-+ instancja eitherwaya c'nie...
-((q) ⊢ (→ (→ p (→ q (→ p q)))
-          (→ (→ (→ p ⊥) (→ q (→ p q)))
-             (→ q (→ p q)))))
-+ 2 MP
-((q) ⊢ (→ (→ (→ p ⊥) (→ q (→ p q)))
-          (→ q (→ p q))))
-((q) ⊢ (→ q (→ p q))))
-
-spox?
-
-potem to samo dla (_ (→ q ⊥)), wpadnie nam:
-(((→ q ⊥)) ⊢ (→ q (→ p q)))
-
-teraz następna litera zdaniowa z names...
-nnoo trzeba paczyćjuż nie na konkluzje tych kalmarów tylko na nową
-listę, a więc takie te
-((q) ⊢ (→ q (→ p q))))
-(((→ q ⊥)) ⊢ (→ q (→ p q)))
-DT:
-(() ⊢ (→ q (→ q (→ p q))))
-(() ⊢ (→ (→ q ⊥) (→ q (→ p q))))
-EITH:
-...
-MP, MP:
-(() ⊢ (→ q (→ p q)))
-
-wiwat!
-"
-
-;[pretty-print (eitherway-metaproof 'p '(→ q (→ p q)))]
-
+;;; this is actual application of completeness theorem. although a bit awkward
+;;; it's more or less proof from ch2 in Ramsay ``played in reverse'' and
+;;; more explicit on the ending.
 ;;; we assume hypotheses were built from all-valuations, therefore
 ;;; they are ordered s.t. leftmost term is first #t then #f with the
 ;;; tail of valuation exactly the same.
-
 ;;; ...so that we can group them into pairs and use eitherway proof and MP
 ;;; to arrive at new list of judgements, free of hypotheses n and (→ n ⊥).
 
+;;; another silly name:
 (define (without-name n #;from judgements) ;; yields a list (!) of metainferences
   (map (lambda ((j j*))
          (let* (((h '⊢ f) j)
@@ -741,7 +698,7 @@ wiwat!
              (((→ q ⊥)) ⊢ (→ (→ (→ p ⊥) (→ q (→ p q))) (→ q (→ p q)))) ;; MP
              (((→ q ⊥)) ⊢ (→ q (→ p q)))))) ;; MP
 
-
+;;; HEART OF IT ALL:
 (define (metaproof<-tautology formula)
   (let* ((names (names formula))
          (valuations (all-valuations names))
@@ -765,6 +722,7 @@ wiwat!
                                last-judgements*
                                `(,@new-judgements ,@new-judgements*))))))))
 
+
 (e.g. (let* ((thm '(→ p p))
              (mi (metaproof<-tautology thm))
              (i (inference<-metainference mi)))
@@ -786,3 +744,5 @@ wiwat!
              (proof? i)
              (equal? (conclusion i) thm)
              (= (length i) 2790))))
+
+;;; strange isn't it?
